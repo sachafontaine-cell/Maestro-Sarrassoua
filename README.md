@@ -18,11 +18,13 @@ No personal data or keys live in this public repository. Everything stays on you
 2. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
 3. **Actions → Deploy web app → Run workflow** (or push any commit). Every push to the default branch tests, builds and publishes.
 
-### 2. Claude API key (2 min, on the phone)
-1. Open https://console.anthropic.com/settings/keys → **Create Key** → copy it. (Add a few dollars of credit under *Billing* if the account is new.)
-2. In Hablemos: **Home → Add your Claude API key** (it opens Settings → Claude API key) → **Paste key**. It is checked without spending anything.
+### 2. AI key (2 min, on the phone): Gemini, free
+1. Open https://aistudio.google.com/apikey → **Create API key** → **Create in new project** → copy it (starts with `AIza`). Never turn on billing in that Google project: it would lose the free tier.
+2. In Hablemos: **Home → Add your AI key** (it opens Settings → AI key) → **Paste key**. It is checked without spending anything.
 
-The key stays on this phone only (IndexedDB). It is sent only to `api.anthropic.com`, never logged, and never written into a backup.
+Want Claude instead (better corrections, about $2–4 a month)? Paste a Claude key (`sk-ant-…`, from https://console.anthropic.com/settings/keys) in the same place. The app picks the AI from the key; switch back any time by pasting the other one.
+
+The key stays on this phone only (IndexedDB). It is sent only to Google (or Anthropic), in a header, never logged, and never written into a backup.
 
 ### 3. Install on the Pixel (1 min)
 1. Open the link above in **Chrome** → ⋮ → **Install app**. On a work-managed phone this is a web app, not an APK, so it is allowed.
@@ -47,7 +49,7 @@ The key stays on this phone only (IndexedDB). It is sent only to `api.anthropic.
 ## Where to change what (one place each)
 | Thing | Change it in |
 |---|---|
-| Claude API key | Settings → Claude API key (Home's button leads there) |
+| AI key (Gemini or Claude) | Settings → AI key (Home's button leads there) |
 | Speaking speed | Settings → Voice ("más despacio" / "más rápido" change the same setting) |
 | Hands-free by default | Settings → Voice (the session's car button switches only the current session) |
 | Voices, Catalina's region | Settings → Accents |
@@ -56,14 +58,16 @@ The key stays on this phone only (IndexedDB). It is sent only to `api.anthropic.
 | Backup | Settings → Backup |
 
 ## Cost
-Claude Sonnet 5.5 (`claude-sonnet-5-5`): $2 per million input tokens, $10 output, **$0.10 cached**. The tutor's instructions and the conversation so far are cached (prompt caching), so each turn pays full price only for what's new. Expect roughly **$0.05–0.15 per session, about $2–4 a month** for daily practice. Settings → Cost shows the running estimate (this session, this month); the real bill is in the Claude Console.
+**Gemini (default): free** on the free tier. If it says the free limit is reached, wait a minute; when one Flash model is busy the app tries the next one by itself.
+
+**Claude (optional):** Sonnet 5.5 (`claude-sonnet-5-5`): $2 per million input tokens, $10 output, **$0.10 cached**. The tutor's instructions and the conversation so far are cached (prompt caching), so each turn pays full price only for what's new. Expect roughly **$0.05–0.15 per session, about $2–4 a month** for daily practice. Settings → Cost shows the running estimate (this session, this month); the real bill is in the Claude Console.
 
 ## Choices made (and how to undo them)
 | Choice | Why | To change it |
 |---|---|---|
-| Claude Sonnet 5.5, not Gemini | Better tutoring and corrections; prompt caching keeps it cheap | `src/lib/claude.ts` is the only file that talks to the AI; model id in `src/lib/cost.ts` |
-| Light thinking (`effort: low`) on chat turns, `medium` for grading the placement test | Quick replies matter when talking | `effort` in `src/lib/claude.ts` / `placement.ts` |
-| Refusal fallback on (`fallbacks: "default"`) | If Claude ever declines a turn, the API retries it on another model by itself | Remove in `src/lib/claude.ts`. If the API rejects this request shape, the app switches to a plain request by itself |
+| Gemini Flash (free) by default, Claude Sonnet 5.5 if you paste a Claude key | Free; Claude stays one paste away | The key decides (Settings → AI key). Code: `src/lib/ai.ts` (Claude + routing), `src/lib/gemini.ts` |
+| Little thinking on chat turns, more for grading the placement test | Quick replies matter when talking | `effort` in `src/lib/ai.ts` / `placement.ts`; `thinkingFor` in `gemini.ts` |
+| Claude only: refusal fallback on (`fallbacks: "default"`) | If Claude ever declines a turn, the API retries it on another model by itself | Remove in `src/lib/ai.ts`. If the API rejects this request shape, the app switches to a plain request by itself |
 | Rosa (Mexico City), Catalina (Bogotá by default) | Personas for the two stages | `src/lib/prompts.ts`, `src/lib/curriculum.ts` |
 | Stage 2 rule: A2 + 8 sessions + ≤0.35 big mistakes per turn | "When the app judges I'm ready" | `UNLOCK` in `src/lib/plan.ts` |
 | Starting level A1+, first review items from your placement weak spots | From your placement test | `defaultProfile` in `src/lib/model.ts`, `SEEDS` in `src/lib/srs.ts` |
@@ -72,11 +76,11 @@ Claude Sonnet 5.5 (`claude-sonnet-5-5`): $2 per million input tokens, $10 output
 | Each choice lives in one place (this table) | So any one can be walked back alone | Edit that one place; later changes come as one commit each (`git revert <commit>`) |
 
 ## How it stays fast
-The first screen needs no network: everything is read from the phone at start. The Claude library loads in the background after the first screen. The tutor's answer streams in, and each sentence is spoken as soon as it arrives. Review grading, voice commands, scheduling and today's pick are plain code (milliseconds).
+The first screen needs no network: everything is read from the phone at start. The Claude library (only if you use Claude) loads in the background after the first screen. The tutor's answer streams in, and each sentence is spoken as soon as it arrives. Review grading, voice commands, scheduling and today's pick are plain code (milliseconds).
 
 ## Develop
-`npm install`, `npm run dev`, `npm test` (reply streaming, voice commands, grading, review intervals, cost, level/streak/unlock, voices, backup), `npm run e2e` (builds, then an emulated Pixel 7 in Chromium with a fake microphone, voice and Claude: first run, a whole tap-to-talk session with voice commands, hands-free, blocked microphone, wrong key, placement test, backup, Stage 2 phone call, offline start, dark mode). Icon: `npm run icons` (design in `scripts/icon-designs.mjs`).
+`npm install`, `npm run dev`, `npm test` (reply streaming, voice commands, grading, review intervals, cost, level/streak/unlock, voices, backup), `npm run e2e` (builds, then an emulated Pixel 7 in Chromium with a fake microphone, voice, Gemini and Claude: first run, a Gemini session, a whole tap-to-talk session with voice commands, hands-free, blocked microphone, wrong key, placement test, backup, Stage 2 phone call, offline start, dark mode). Icon: `npm run icons` (design in `scripts/icon-designs.mjs`).
 
-Files: `src/lib/session.ts` (the session), `claude.ts` (the AI), `prompts.ts` (what the tutor is told), `reply.ts` (reads the streamed answer), `speech.ts` (mic and voice), `srs.ts` (review), `plan.ts` (today's pick, level, unlock), `data.ts`/`db.ts` (IndexedDB); screens in `src/screens/`.
+Files: `src/lib/session.ts` (the session), `ai.ts` + `gemini.ts` (the AI), `prompts.ts` (what the tutor is told), `reply.ts` (reads the streamed answer), `speech.ts` (mic and voice), `srs.ts` (review), `plan.ts` (today's pick, level, unlock), `data.ts`/`db.ts` (IndexedDB); screens in `src/screens/`.
 
 **Tested here:** all of the above in an emulated Pixel 7. **Not testable here:** the real microphone, Google's speech recognition and your phone's voices. The first session on the phone is the real check (5-minute checklist: allow the mic, tap-to-talk one turn, say "repite", switch to hands-free with the car button, say "terminar").

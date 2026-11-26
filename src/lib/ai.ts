@@ -1,12 +1,16 @@
-// The only file that talks to the AI: Claude, straight from the phone (no server in between).
-// The key stays on the phone and is only ever sent to api.anthropic.com. Nothing here logs it.
-// To switch to another AI later, this is the one file to replace.
+// The only place the app talks to the AI, straight from the phone (no server in between).
+// Which AI is decided by the key pasted in Settings: Gemini ("AIza…", free tier, gemini.ts) or
+// Claude ("sk-ant-…", below). The key stays on the phone and is only ever sent to that AI's
+// own address. Nothing here logs it.
 import type Anthropic from '@anthropic-ai/sdk'
 import type { BetaMessageParam, BetaContentBlock, BetaTextBlockParam } from '@anthropic-ai/sdk/resources/beta/messages/messages'
 import { addUsage, setSettings, settings } from './data'
 import { MODEL, usd } from './cost'
 import { uid } from './store'
 import type { Usage } from './model'
+import { GeminiError, flashModels, geminiStream, isGeminiKey } from './gemini'
+
+export const provider = (key = settings.get().apiKey): 'gemini' | 'claude' => (isGeminiKey(key) ? 'gemini' : 'claude')
 
 export type Msg = BetaMessageParam
 
@@ -20,7 +24,7 @@ export const loadSdk = () => (sdk ??= import('@anthropic-ai/sdk'))
 
 async function client(key?: string): Promise<Anthropic> {
   const k = key ?? settings.get().apiKey
-  if (!k) throw new AiError('nokey', 'Add your Claude API key in Settings.')
+  if (!k) throw new AiError('nokey', 'Add your AI key in Settings.')
   const { default: Anthropic } = await loadSdk()
   return new Anthropic({ apiKey: k, dangerouslyAllowBrowser: true, maxRetries: 2, timeout: 90_000 })
 }
@@ -65,6 +69,8 @@ export interface CallResult { text: string; content: BetaContentBlock[]; stop: s
  * from then on (no beta features), so the app keeps working.
  */
 export async function call(o: CallOpts): Promise<CallResult> {
+  if (!settings.get().apiKey) throw new AiError('nokey', 'Add your AI key in Settings.')
+  if (provider() === 'gemini') return callGemini(o)
   const c = await client()
   const plain = !!settings.get().plainRequests
   try {
@@ -125,8 +131,42 @@ export function flattenSystem(list: Msg[]): Msg[] {
   return out
 }
 
-/** Checks a key without spending anything (reads the model's description). */
-export async function checkKey(key: string): Promise<void> {
+/**
+ * Gemini: same request, in Gemini's shape. App messages are folded into the learner's turn;
+ * Gemini caches repeated prompts by itself (no setting needed). The free tier costs nothing.
+ */
+async function callGemini(o: CallOpts): Promise<CallResult> {
+  const msgs = flattenSystem(o.messages).map((m) => ({
+    role: m.role === 'assistant' ? 'model' as const : 'user' as const,
+    text: typeof m.content === 'string' ? m.content : (m.content ?? []).map((b) => (b.type === 'text' ? b.text : '')).join('\n'),
+  })).filter((m) => m.text)
+  try {
+    const r = await geminiStream(settings.get().apiKey!, o.system.join('\n\n'), msgs, { maxTokens: o.maxTokens, effort: o.effort ?? 'low', onDelta: (d) => o.onText?.(d), signal: o.signal })
+    addUsage({ id: uid(), at: Date.now(), session: o.session, kind: o.kind, model: r.model, input: r.input - r.cached, cacheWrite: 0, cacheRead: r.cached, output: r.output, usd: 0 })
+    return { text: r.text, content: [{ type: 'text', text: r.text, citations: null }] as unknown as BetaContentBlock[], stop: 'end_turn' }
+  } catch (e) { throw geminiError(e) }
+}
+
+function geminiError(e: unknown): AiError {
+  if (e instanceof AiError) return e
+  if (e instanceof GeminiError) {
+    if (e.status === 400 || e.status === 403) return new AiError('key', e.message)
+    if (e.status === 429 || e.status >= 500) return new AiError('busy', e.message)
+    if (e.status === 0 && /internet|connection/i.test(e.message)) return new AiError('offline', e.message)
+    return new AiError('other', e.message)
+  }
+  return new AiError('other', e instanceof Error ? e.message : 'Something went wrong.')
+}
+
+/** Checks a key without spending anything (lists the models it can use). */
+export async function checkKey(key: string): Promise<string | undefined> {
+  if (isGeminiKey(key)) {
+    try {
+      const list = await flashModels(key)
+      if (!list.length) throw new AiError('key', 'No Gemini Flash model is available for this key.')
+      return list[0]
+    } catch (e) { throw geminiError(e) }
+  }
   try {
     const c = await client(key)
     await c.models.retrieve(MODEL)

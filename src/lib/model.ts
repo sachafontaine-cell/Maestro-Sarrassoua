@@ -14,8 +14,10 @@ export type StageId = 1 | 2
 export type RegionId = 'bogota' | 'medellin' | 'cali' | 'costa' | 'santander'
 
 export interface Settings {
-  /** Claude API key: only on this phone, never in a backup, never logged. */
+  /** AI key (Gemini "AIza…" or Claude "sk-ant-…"): only on this phone, never in a backup, never logged. */
   apiKey?: string
+  /** The Gemini model that answered last (tried first next time). */
+  geminiModel?: string
   /** Base speaking rate of the tutor's voice (1 = normal). */
   rate: number
   handsFreeDefault: boolean

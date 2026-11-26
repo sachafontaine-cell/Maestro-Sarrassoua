@@ -49,5 +49,24 @@ export async function fakeClaude(page, opts = {}) {
     const body = req.postDataJSON()
     return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'text/event-stream' }, body: sse(tutorReply(body)) })
   })
+  // Gemini (generativelanguage.googleapis.com): the same tutor, in Gemini's shape.
+  await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
+    const url = new URL(req.url())
+    calls.push({ path: url.pathname, headers: req.headers(), body: req.postDataJSON?.() ?? null, gemini: true })
+    if (req.headers()['x-goog-api-key'] === 'AIzaBADBADBADBADBADBADBADBAD') return route.fulfill({ status: 400, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify({ error: { code: 400, message: 'API key not valid. Please pass a valid API key.' } }) })
+    if (url.pathname === '/v1beta/models') return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify({ models: [{ name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] }, { name: 'models/gemini-3.0-flash', supportedGenerationMethods: ['generateContent'] }] }) })
+    const b = req.postDataJSON()
+    const body = {
+      system: [{ text: b.systemInstruction.parts.map((x) => x.text).join('') }],
+      messages: b.contents.map((c) => ({ role: c.role === 'model' ? 'assistant' : 'user', content: c.parts.map((x) => x.text).join('') })),
+    }
+    const text = tutorReply(body)
+    let out = ''
+    for (let i = 0; i < text.length; i += 15) out += `data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts: [{ text: text.slice(i, i + 15) }] } }] })}\r\n\r\n`
+    out += `data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts: [{ text: '' }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 2500, cachedContentTokenCount: 2000, candidatesTokenCount: 60 } })}\r\n\r\n`
+    return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'text/event-stream' }, body: out })
+  })
   return calls
 }

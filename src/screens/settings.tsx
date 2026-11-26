@@ -2,7 +2,8 @@
 // Each of these is changed here and nowhere else.
 import { useEffect, useState } from 'preact/hooks'
 import { settings, setSettings, usage, sessions } from '../lib/data'
-import { checkKey, AiError, loadSdk } from '../lib/claude'
+import { checkKey, AiError, provider } from '../lib/ai'
+import { isGeminiKey } from '../lib/gemini'
 import { REGIONS } from '../lib/curriculum'
 import type { RegionId } from '../lib/model'
 import { route } from '../lib/nav'
@@ -15,6 +16,7 @@ import { backupName, makeBackup, readBackup, restoreBackup } from '../lib/backup
 import { checkForUpdate, updateNow } from '../lib/update'
 import { Fleur, Icon, Spinner, Switch } from '../ui'
 
+const AI_STUDIO = 'https://aistudio.google.com/apikey'
 const CONSOLE = 'https://console.anthropic.com/settings/keys'
 
 export function Settings() {
@@ -26,7 +28,7 @@ export function Settings() {
       <h1 class="h1">Settings</h1>
       <div class={`setstatus ${s.apiKey ? 'ok' : 'todo'}`} role="status">
         <b>{s.apiKey ? <><Icon.check />Ready</> : '1 thing to set up'}</b>
-        <span>{s.apiKey ? 'Your tutor is set up on this phone.' : 'Add your Claude API key below.'}</span>
+        <span>{s.apiKey ? 'Your tutor is set up on this phone.' : 'Add your AI key below.'}</span>
       </div>
       <KeySection />
       <VoiceSection />
@@ -43,15 +45,14 @@ function KeySection() {
   const [key, setKey] = useState('')
   const [st, setSt] = useState<{ busy?: boolean; err?: string; ok?: string }>({})
   const [change, setChange] = useState(!s.apiKey)
-  useEffect(() => { void loadSdk() }, [])
   const save = async (raw: string) => {
     const k = raw.trim()
     if (!k) return
-    if (!/^sk-ant-/.test(k)) { setSt({ err: 'That doesn’t look like a Claude API key (it starts with sk-ant-).' }); return }
+    if (!isGeminiKey(k) && !/^sk-ant-/.test(k)) { setSt({ err: 'That doesn’t look like a Gemini key (starts with AIza) or a Claude key (starts with sk-ant-).' }); return }
     setSt({ busy: true })
     try {
-      await checkKey(k)
-      setSettings({ apiKey: k })
+      const model = await checkKey(k)
+      setSettings({ apiKey: k, geminiModel: model })
       setKey(''); setChange(false); setSt({ ok: 'Key checked and saved on this phone.' })
     } catch (e) {
       if (e instanceof AiError && (e.code === 'offline' || e.code === 'busy')) {
@@ -63,12 +64,12 @@ function KeySection() {
     try { const t = (await navigator.clipboard.readText()).trim(); if (t) { setKey(t); void save(t) } else setSt({ err: 'The clipboard is empty: copy the key first.' }) } catch { setSt({ err: 'Paste was blocked: long-press the box below and paste.' }) }
   }
   return (
-    <section class="section" id="key" aria-label="Claude API key">
-      <span class="label">Claude API key</span>
+    <section class="section" id="key" aria-label="AI key">
+      <span class="label">AI key</span>
       <div class="card card-pad stack">
         {!change && s.apiKey ? (
           <>
-            <div class="between"><span class="chip ok"><Icon.check />Key saved</span><span class="muted num">…{s.apiKey.slice(-4)}</span></div>
+            <div class="between"><span class="chip ok"><Icon.check />{provider(s.apiKey) === 'gemini' ? 'Gemini' : 'Claude'} key saved</span><span class="muted num">…{s.apiKey.slice(-4)}</span></div>
             {st.ok && <p class="muted">{st.ok}</p>}
             <div class="row">
               <button class="btn btn-quiet btn-sm grow press" onClick={() => { setChange(true); setSt({}) }}>Change</button>
@@ -78,20 +79,21 @@ function KeySection() {
         ) : (
           <>
             <ol class="muted" style={{ margin: 0, paddingLeft: '20px' }}>
-              <li>In the Claude Console: <b>Create Key</b>, copy it.</li>
+              <li>In Google AI Studio: <b>Create API key</b> → <b>Create in new project</b>. Copy it.</li>
               <li>Come back and tap <b>Paste key</b>.</li>
             </ol>
-            <a class="btn btn-secondary press" href={CONSOLE} target="_blank" rel="noopener">Get a key<Icon.out /></a>
+            <a class="btn btn-secondary press" href={AI_STUDIO} target="_blank" rel="noopener">Get a free Gemini key<Icon.out /></a>
             {'clipboard' in navigator && <button class="btn btn-primary press" disabled={st.busy} onClick={paste}>{st.busy ? <Spinner /> : 'Paste key'}</button>}
             <form class="row" onSubmit={(e) => { e.preventDefault(); void save(key) }}>
-              <input class="field grow" type="password" value={key} placeholder="sk-ant-…" aria-label="API key" autoComplete="off" onInput={(e) => setKey((e.target as HTMLInputElement).value)} />
+              <input class="field grow" type="password" value={key} placeholder="AIza…" aria-label="API key" autoComplete="off" onInput={(e) => setKey((e.target as HTMLInputElement).value)} />
               <button class="btn btn-quiet btn-sm press" type="submit" disabled={!key.trim() || st.busy}>Save</button>
             </form>
             {st.err && <p class="muted" style={{ color: 'var(--danger)' }} role="alert">{st.err}</p>}
+            <p class="muted small">Prefer Claude (paid, about $3 a month)? Paste a Claude key from the <a href={CONSOLE} target="_blank" rel="noopener">Claude Console</a> instead.</p>
           </>
         )}
       </div>
-      <p class="setnote">Stored only on this phone, sent only to Anthropic, never in backups. Model: {MODEL}.</p>
+      <p class="setnote">Stored only on this phone, sent only to {provider(s.apiKey) === 'gemini' ? 'Google' : 'Anthropic'}, never in backups. {provider(s.apiKey) === 'gemini' ? <>Free tier: never turn on billing in that Google project. Model: {s.geminiModel ?? 'Gemini Flash'}.</> : <>Model: {MODEL}.</>}</p>
     </section>
   )
 }
@@ -219,7 +221,9 @@ function CostSection() {
         <div class="setrow"><span class="grow">Average per session</span><span class="setval num">{money(t.avgSession)}</span></div>
         <div class="setrow"><span class="grow">Since the start</span><span class="setval num">{money(t.allTime)}</span></div>
       </div>
-      <p class="setnote">From the token counts Claude reports, at Sonnet 5.5 prices ($2 per million tokens in, $10 out, $0.10 when cached). The real bill is in the Claude Console.</p>
+      <p class="setnote">{provider() === 'gemini'
+        ? 'Gemini free tier: $0. (Earlier Claude sessions, if any, are counted above.) If Gemini says the free limit is reached, wait a minute.'
+        : 'From the token counts Claude reports, at Sonnet 5.5 prices ($2 per million tokens in, $10 out, $0.10 when cached). The real bill is in the Claude Console.'}</p>
     </section>
   )
 }

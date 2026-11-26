@@ -23,7 +23,7 @@ export function PlacementScreen() {
           <p>Some are questions in Spanish at normal speed: answer them. Others are English sentences: say them in Spanish. Don’t worry about mistakes, they are the point.</p>
           <p class="muted">It sets your level and what your sessions focus on. You can retake it any time.</p>
         </div>
-        {!key && <p class="err">The test is graded by Claude: add your API key in Settings first.</p>}
+        {!key && <p class="err">The test is graded by the AI: add your AI key in Settings first.</p>}
         {!canListen() && <p class="err">Speech recognition isn’t available here: use Chrome on your phone.</p>}
         <button class="btn btn-primary btn-big press" disabled={!key} onClick={begin}>Start</button>
       </main>

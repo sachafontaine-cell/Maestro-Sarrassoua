@@ -66,7 +66,7 @@ export function Home() {
       <div class="startdock">
         {!s.apiKey ? (
           <>
-            <button class="btn btn-primary btn-big press" onClick={() => go('settings', 'key')}>Add your Claude API key</button>
+            <button class="btn btn-primary btn-big press" onClick={() => go('settings', 'key')}>Add your AI key</button>
             <p class="muted tcenter">One time: the tutor needs it. It stays on this phone.</p>
           </>
         ) : (

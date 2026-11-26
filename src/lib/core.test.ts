@@ -6,7 +6,7 @@ import { AFTER_SUCCESS, DAY, dueCards, newCard, review } from './srs'
 import { usd, totals } from './cost'
 import { blendLevel, levelLabel, levelProgress, parseLevel, pickScenario, readyForStage2, streak, weakness, rankWeak, priorFrom, PRIOR } from './plan'
 import { bestVoice, chunks, voiceScore } from './speech'
-import { flattenSystem } from './claude'
+import { flattenSystem } from './ai'
 import { parseRecap, localRecap } from './session'
 import { parsePlacement } from './placement'
 import { sessionBlock, TUTOR } from './prompts'
@@ -208,5 +208,17 @@ describe('AI requests', () => {
     const r = localRecap({ mistakes: [mis({}), mis({}), mis({ type: 'french', said: 'nager', fix: 'nadar', big: true })], words: [{ es: 'la llave', en: 'faucet' }] }, Date.now())
     expect(r.fixes.map((f) => f.fix)).toEqual(['yo voy', 'nadar'])
     expect(r.cards.map((c) => c.answer)).toEqual(['yo voy', 'nadar', 'la llave'])
+  })
+})
+
+import { isGeminiKey, modelOrder } from './gemini'
+describe('Gemini', () => {
+  it('tells a Gemini key from a Claude key', () => {
+    expect(isGeminiKey('AIzaSyA1234567890abcdefghijklmnopqrstu')).toBe(true)
+    expect(isGeminiKey('sk-ant-api03-xyz')).toBe(false)
+    expect(isGeminiKey(undefined)).toBe(false)
+  })
+  it('tries the model that answered last first', () => {
+    expect(modelOrder('gemini-2.5-flash', ['gemini-3.0-flash', 'gemini-2.5-flash'])).toEqual(['gemini-2.5-flash', 'gemini-3.0-flash'])
   })
 })

@@ -3,7 +3,7 @@
 // grades everything at the end and sets the level.
 import { createStore } from './store'
 import { cards, profile, saveCards, setProfile } from './data'
-import { call, AiError } from './claude'
+import { call, AiError } from './ai'
 import { PLACEMENT } from './prompts'
 import { listen, MicError, speakOne, stopSpeaking, unlockSpeech, loadVoices, type Listening } from './speech'
 import { sayOpts } from './voice'
