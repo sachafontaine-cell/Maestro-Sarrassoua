@@ -1,0 +1,26 @@
+{
+  "name": "hablemos",
+  "private": true,
+  "version": "1.0.0",
+  "buildBase": 0,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "e2e": "npm run build && node tests/e2e/run.mjs",
+    "icons": "node scripts/icons.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.14.0",
+    "preact": "^10.29.8"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.0"
+  }
+}
