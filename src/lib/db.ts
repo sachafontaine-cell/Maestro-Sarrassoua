@@ -45,11 +45,11 @@ export async function readAll<T>(t: Table): Promise<[string, T][]> {
   })
 }
 
-// Writes are queued and sent together in one transaction per table, on the next idle moment.
+// Writes are queued and sent together, one transaction per table, right after the change.
 type Op = { put: true; v: unknown } | { put: false }
 const queue = new Map<Table, Map<string, Op>>()
 let flushing: Promise<void> | null = null
-let timer: ReturnType<typeof setTimeout> | null = null
+let scheduled = false
 
 export function put(t: Table, key: string, v: unknown) { enqueue(t, key, { put: true, v }) }
 export function del(t: Table, key: string) { enqueue(t, key, { put: false }) }
@@ -59,7 +59,8 @@ function enqueue(t: Table, key: string, op: Op) {
   if (op.put) m.set(key, op.v); else m.delete(key)
   if (!queue.has(t)) queue.set(t, new Map())
   queue.get(t)!.set(key, op)
-  if (!timer) timer = setTimeout(() => { timer = null; void flush() }, 60)
+  // Everything changed in the same tap goes in one transaction, right after it.
+  if (!scheduled) { scheduled = true; queueMicrotask(() => { scheduled = false; void flush() }) }
 }
 
 export async function flush(): Promise<void> {

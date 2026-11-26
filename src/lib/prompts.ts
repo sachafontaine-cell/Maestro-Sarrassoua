@@ -88,6 +88,8 @@ The role-play lasts about ${s.minutes} minutes; the app will tell you when to wr
 export const START = '[The learner is ready. Start the scene now with your first line, in character.]'
 export const WRAP_UP = 'About one minute left. Bring the scene to a natural, warm close within one or two turns, and set "done": true on your goodbye line.'
 export const ENGLISH = 'The learner said "en inglés": first give a short English explanation of what you just said or asked (max 2 sentences) in <say lang="en">, then say it again in simpler Spanish and continue.'
+export const HANDS_FREE_ON = 'The learner just switched to HANDS-FREE mode (driving or walking, cannot look at the screen): from now on everything must be understandable by ear; keep sentences especially short and clear.'
+export const HANDS_FREE_OFF = 'The learner switched back to normal mode and can see written corrections on screen again.'
 export const RECAP_USER = '[The session is over.]'
 export const RECAP = `The session is over. Do not say anything in character. Write the end-of-session recap for the app, and output ONLY this, with nothing before or after:
 <recap>{"fixes":[{"t":"verb","said":"yo va","fix":"yo voy","why":"ir → yo voy (one short English line)"}],"cards":[{"cue":"How do you say: I'm going to the market?","answer":"Voy al mercado.","alts":["Voy a ir al mercado."],"t":"verb"}],"words":[{"es":"la aspiradora","en":"the vacuum cleaner"}],"level":"A2-","note_en":"One encouraging sentence in English about what went well and the one thing to focus on next.","note_es":"La misma idea, muy corta, en español sencillo."}</recap>

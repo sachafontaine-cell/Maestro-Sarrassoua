@@ -4,6 +4,7 @@ import { ITEMS, answer, begin, gradeTest, micTap, openTest, ptest, replayItem, s
 import { settings } from '../lib/data'
 import { go } from '../lib/nav'
 import { canListen } from '../lib/speech'
+import { TYPE_LABEL } from '../lib/model'
 import { Icon, Spinner } from '../ui'
 
 export function PlacementScreen() {
@@ -41,7 +42,7 @@ export function PlacementScreen() {
             <span class="label">Your level</span>
             <div class="levelbig">{r.label}</div>
             <p>{r.summary}</p>
-            {r.weak.length > 0 && <p class="muted">Sessions will focus on: {r.weak.join(', ')}.</p>}
+            {r.weak.length > 0 && <p class="muted">Sessions will focus on: {r.weak.map((t) => TYPE_LABEL[t].toLowerCase()).join(', ')}.</p>}
           </div>
         )}
         {r && <button class="btn btn-primary press" onClick={leave}>Done</button>}

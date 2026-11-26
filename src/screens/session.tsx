@@ -233,7 +233,8 @@ function HandsFree({ l }: { l: Live }) {
         <span class="sr" role="status">{paused ? 'Paused' : l.status}</span>
       </div>
       <div class={`orb ${l.status}`} aria-hidden="true"><span>{icon}</span></div>
-      {l.error && l.error.msg !== 'MIC_DENIED' && !l.error.retry && <p class="tcenter">{l.error.msg}</p>}
+      {l.error?.mic && <p class="tcenter">The microphone is blocked. Tap “Screen” for help.</p>}
+      {l.error && !l.error.mic && !l.error.retry && <p class="tcenter">{l.error.msg}</p>}
       <div class="hfbtns">
         <button class="hfbtn wide press" onClick={() => (paused ? (l.error?.retry ? retry() : resume()) : pause())} aria-label={paused ? 'Resume' : 'Pause'}>{paused ? <><Icon.play />Resume</> : <><Icon.pause />Pause</>}</button>
         <button class="hfbtn press" onClick={repeatLast} aria-label="Repeat"><Icon.repeat />Repeat</button>

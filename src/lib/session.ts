@@ -12,7 +12,7 @@ import { grade, norm, wordCount, type Grade } from './grade'
 import { command, RATE_STEP, type Command } from './commands'
 import { ReplyParser, type NoteMistake, type Seg } from './reply'
 import { AiError, call, type Msg } from './claude'
-import { ENGLISH, RECAP, RECAP_USER, sessionBlock, START, TUTOR, WRAP_UP } from './prompts'
+import { ENGLISH, HANDS_FREE_OFF, HANDS_FREE_ON, RECAP, RECAP_USER, sessionBlock, START, TUTOR, WRAP_UP } from './prompts'
 import { listen, loadVoices, MicError, SpeakQueue, stopSpeaking, unlockSpeech, type Listening } from './speech'
 import { nudgeRate, sayOpts, stageLang } from './voice'
 import { keepAwake } from './wakelock'
@@ -72,6 +72,8 @@ let waiter: ((v: string | typeof RETRY) => void) | null = null
 let mic: Listening | null = null
 /** A command from a button (Repeat), handled like the spoken one. */
 let injected: string | null = null
+/** Hands-free switched on or off mid-conversation: tell the tutor with the next turn. */
+let modeNote: string | null = null
 const RETRY = Symbol('retry')
 class Stop extends Error {}
 
@@ -93,6 +95,7 @@ export function startSession(o: StartOpts) {
   history = []
   lastSay = []
   wrapSent = false
+  modeNote = null
   paused = null
   live.set({
     id: uid(), stage: p.stage, scenario: o.scenario, handsFree: o.handsFree, phase: items.length ? 'review' : 'talk', status: 'idle',
@@ -185,8 +188,10 @@ async function hear(g: number): Promise<string> {
       patch({ interim: '' })
       if (text) return text
       silent++
+      // Driving: take your time. A nudge after a while, a pause only after a long silence.
       if (silent === 2) await speak([es('¿Sigue ahí?')], g)
-      if (silent >= 4) { await speak([es('Pausa. Toque el botón para seguir.')], g); pause(); silent = 0 }
+      if (silent === 4) await speak([en('Say “repite” to hear it again, or “terminar” to finish.')], g)
+      if (silent >= 6) { await speak([es('Pausa. Toque el botón para seguir.')], g); pause(); silent = 0 }
       continue
     }
     // Tap-to-talk: wait for the mic button (or typed text). It may already be listening
@@ -226,7 +231,8 @@ export function micTap() {
     mic = m
     m.result.then((text) => {
       if (mic === m) mic = null
-      if (waiter) waiter(text); else patch({ status: 'waiting' })
+      // Answered before the tutor's reply had fully arrived: keep it for the next turn.
+      if (waiter) waiter(text); else if (text) { injected = text; patch({ status: 'thinking' }) } else patch({ status: 'waiting' })
     }, (e) => {
       if (mic === m) mic = null
       if (e instanceof MicError) patch({ error: { msg: e.code === 'denied' ? 'MIC_DENIED' : e.message, mic: true }, status: 'waiting' })
@@ -237,7 +243,12 @@ export function micTap() {
 
 /** Typed instead of spoken. */
 export function sendTyped(text: string) {
-  if (waiter && text.trim()) waiter(text.trim())
+  const t = text.trim()
+  if (!t) return
+  if (waiter) { waiter(t); return }
+  // Typed while the tutor is still speaking: interrupt, it's the next answer.
+  const l = live.get()
+  if (l && (l.status === 'speaking' || l.status === 'listening')) { injected = t; stopSpeaking(); mic?.cancel(); mic = null }
 }
 
 export function cancelListening() { mic?.cancel(); mic = null; const l = live.get(); if (l && l.status === 'listening') patch({ status: 'waiting', interim: '' }) }
@@ -248,6 +259,7 @@ export function setHandsFree(on: boolean) {
   mic?.cancel()
   mic = null
   patch({ handsFree: on })
+  if (history.length) modeNote = on ? HANDS_FREE_ON : HANDS_FREE_OFF
   if (waiter) waiter(RETRY)
 }
 
@@ -264,7 +276,7 @@ export function pause(stopNow = true) {
 export function resume() {
   const p = paused
   paused = null
-  patch({ status: 'idle', error: undefined })
+  patch({ status: waiter ? 'waiting' : 'idle', error: undefined })
   p?.resume()
 }
 async function waitIfPaused(g: number) {
@@ -371,6 +383,7 @@ async function talkLoop(g: number) {
     addMine(heard)
     const notes: Msg[] = []
     const elapsed = Date.now() - (live.get()!.talkAt ?? Date.now())
+    if (modeNote) { notes.push({ role: 'system', content: modeNote }); modeNote = null }
     if (elapsed > WRAP_MS && !wrapSent) { wrapSent = true; notes.push({ role: 'system', content: WRAP_UP }) }
     const done = await tutorTurn([{ role: 'user', content: heard }, ...notes], g)
     if (done || Date.now() - (live.get()!.talkAt ?? Date.now()) > END_MS) { patch({ phase: 'recap' }); return }
