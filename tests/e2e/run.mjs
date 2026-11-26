@@ -87,7 +87,7 @@ await test('first run: Home asks for the key; the button leads to Settings → k
   expect(p.url().includes('#/settings/key'), 'went to the key section')
   await p.getByRole('textbox', { name: 'API key' }).fill('not-a-key')
   await p.getByRole('button', { name: 'Save' }).click()
-  await p.getByText(/doesn’t look like a Gemini key/).waitFor()
+  await p.getByText(/looks too short/).waitFor()
   await p.getByRole('textbox', { name: 'API key' }).fill('sk-ant-test-0000')
   await p.getByRole('button', { name: 'Save' }).click()
   await p.getByText('Key checked and saved on this phone.').waitFor()

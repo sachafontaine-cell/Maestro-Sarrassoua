@@ -5,7 +5,10 @@ import { setSettings, settings } from './data'
 
 const API = 'https://generativelanguage.googleapis.com/v1beta'
 
-export const isGeminiKey = (k: string | undefined) => !!k && /^AIza[\w-]{20,}$/.test(k.trim())
+/** Pasted keys often carry spaces, line breaks, quotes or invisible characters: keep only key characters. */
+export const cleanKey = (k: string) => k.replace(/[^\w.\-]/g, '')
+/** Anything that isn't a Claude key is treated as a Gemini key; Google decides if it's valid. */
+export const isGeminiKey = (k: string | undefined) => !!k && cleanKey(k).length >= 10 && !/^sk-ant-/.test(cleanKey(k))
 
 export class GeminiError extends Error {
   constructor(message: string, readonly status = 0, readonly retry = false) { super(message) }
@@ -96,8 +99,13 @@ async function streamOnce(key: string, model: string, body: Record<string, unkno
 export async function flashModels(key: string): Promise<string[]> {
   let r: Response
   try { r = await fetch(`${API}/models?pageSize=200`, { headers: { 'x-goog-api-key': key } }) } catch { throw new GeminiError('No internet connection.') }
-  if (r.status === 400 || r.status === 403) throw new GeminiError('Gemini refused the key. Copy it again from AI Studio.', r.status)
-  if (!r.ok) throw new GeminiError(`Gemini error ${r.status}`, r.status)
+  if (!r.ok) {
+    let msg = ''
+    try { msg = String((await r.json())?.error?.message ?? '') } catch { /* not JSON */ }
+    const why = msg ? ` Google says: “${msg.slice(0, 160)}”` : ''
+    if (r.status === 400 || r.status === 403) throw new GeminiError(`Gemini refused the key.${why}`, r.status)
+    throw new GeminiError(`Gemini error ${r.status}.${why}`, r.status)
+  }
   const j = (await r.json()) as { models?: { name: string; supportedGenerationMethods?: string[] }[] }
   const names = (j.models ?? []).filter((m) => m.supportedGenerationMethods?.includes('generateContent')).map((m) => m.name.replace(/^models\//, ''))
   const v = (n: string) => parseFloat(n.slice(7)) || 0

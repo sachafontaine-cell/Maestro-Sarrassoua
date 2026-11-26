@@ -222,3 +222,11 @@ describe('Gemini', () => {
     expect(modelOrder('gemini-2.5-flash', ['gemini-3.0-flash', 'gemini-2.5-flash'])).toEqual(['gemini-2.5-flash', 'gemini-3.0-flash'])
   })
 })
+
+import { cleanKey } from './gemini'
+describe('pasted keys', () => {
+  it('drops spaces, line breaks, quotes and invisible characters', () => {
+    expect(cleanKey(' "AIzaSyA12345_67890-abc"\n​')).toBe('AIzaSyA12345_67890-abc')
+    expect(isGeminiKey(' AIzaSyA1234567890abcdef \n')).toBe(true)
+  })
+})

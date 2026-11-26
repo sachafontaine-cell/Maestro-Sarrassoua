@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'preact/hooks'
 import { settings, setSettings, usage, sessions } from '../lib/data'
 import { checkKey, AiError, provider } from '../lib/ai'
-import { isGeminiKey } from '../lib/gemini'
+import { cleanKey } from '../lib/gemini'
 import { REGIONS } from '../lib/curriculum'
 import type { RegionId } from '../lib/model'
 import { route } from '../lib/nav'
@@ -46,9 +46,9 @@ function KeySection() {
   const [st, setSt] = useState<{ busy?: boolean; err?: string; ok?: string }>({})
   const [change, setChange] = useState(!s.apiKey)
   const save = async (raw: string) => {
-    const k = raw.trim()
+    const k = cleanKey(raw)
     if (!k) return
-    if (!isGeminiKey(k) && !/^sk-ant-/.test(k)) { setSt({ err: 'That doesn’t look like a Gemini key (starts with AIza) or a Claude key (starts with sk-ant-).' }); return }
+    if (k.length < 10) { setSt({ err: 'That key looks too short: copy the whole key again.' }); return }
     setSt({ busy: true })
     try {
       const model = await checkKey(k)
@@ -85,7 +85,7 @@ function KeySection() {
             <a class="btn btn-secondary press" href={AI_STUDIO} target="_blank" rel="noopener">Get a free Gemini key<Icon.out /></a>
             {'clipboard' in navigator && <button class="btn btn-primary press" disabled={st.busy} onClick={paste}>{st.busy ? <Spinner /> : 'Paste key'}</button>}
             <form class="row" onSubmit={(e) => { e.preventDefault(); void save(key) }}>
-              <input class="field grow" type="password" value={key} placeholder="AIza…" aria-label="API key" autoComplete="off" onInput={(e) => setKey((e.target as HTMLInputElement).value)} />
+              <input class="field grow" type="password" value={key} placeholder="Paste the key" aria-label="API key" autoComplete="off" onInput={(e) => setKey((e.target as HTMLInputElement).value)} />
               <button class="btn btn-quiet btn-sm press" type="submit" disabled={!key.trim() || st.busy}>Save</button>
             </form>
             {st.err && <p class="muted" style={{ color: 'var(--danger)' }} role="alert">{st.err}</p>}
