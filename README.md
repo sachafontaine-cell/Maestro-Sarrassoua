@@ -6,6 +6,9 @@ Same family as Chef Luc, Travel Sidekick and the Control Center: navy and gold, 
 - **Open it:** https://sachafontaine-cell.github.io/Maestro-Sarrassoua/ then Chrome ⋮ → *Install app* (or *Add to Home screen*).
 - **Update:** Settings → the version at the bottom checks right away. The app also checks when opened and every 30 minutes, and updates when you leave it (never mid-session).
 
+![Home, review, conversation with a correction card, recap, hands-free](docs/screens-1.png)
+![Progress, blocked microphone, placement test, Stage 2 phone call, dark mode](docs/screens-2.png)
+
 No personal data or keys live in this public repository. Everything stays on your phone (IndexedDB), with a JSON backup you control.
 
 ## One-time setup
