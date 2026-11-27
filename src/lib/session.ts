@@ -25,7 +25,9 @@ export type Phase = 'review' | 'talk' | 'recap' | 'done'
 export type Status = 'idle' | 'waiting' | 'listening' | 'thinking' | 'speaking' | 'paused'
 
 export interface Correction extends NoteMistake { revealed: boolean }
-export interface Bubble { id: string; who: 'tutor' | 'me'; text: string; segs?: Seg[]; corrections?: Correction[]; streaming?: boolean }
+/** plays: how many times a tutor line was heard. From the 3rd, its words show (phone call) and it's slower. */
+export interface Bubble { id: string; who: 'tutor' | 'me'; text: string; segs?: Seg[]; corrections?: Correction[]; streaming?: boolean; plays?: number }
+export const HINT_AFTER = 3
 export interface ReviewItem { card: Card; heard?: string; grade?: Grade }
 export interface Recap { fixes: Fix[]; words: Word[]; noteEn: string; noteEs: string; level?: string; added: number; spoke: number; minutes: number; reviewed: number; reviewOk: number }
 
@@ -64,6 +66,7 @@ let system: string[] = []
 let ctrl: AbortController | null = null
 let gen = 0 // bumps when a session ends: anything still running from it stops
 let lastSay: Seg[] = []
+let lastSayId = ''
 let wrapSent = false
 let paused: { resume: () => void; promise: Promise<void> } | null = null
 
@@ -94,6 +97,7 @@ export function startSession(o: StartOpts) {
   const items = dueCards(Object.values(cards.get()), now).map((card) => ({ card }))
   history = []
   lastSay = []
+  lastSayId = ''
   wrapSent = false
   modeNote = null
   paused = null
@@ -283,6 +287,16 @@ async function waitIfPaused(g: number) {
   while (paused) { await paused.promise; alive(g) }
 }
 
+/** "I don't know": counts as a miss and shows the answer (review). */
+export function showAnswer() {
+  const l = live.get()
+  if (!l || l.phase !== 'review') return
+  injected = 'no sé'
+  if (l.status === 'speaking') stopSpeaking()
+  if (mic) { mic.cancel(); mic = null }
+  if (waiter) waiter(RETRY)
+}
+
 /** The Repeat button: same as saying "repite". */
 export function repeatLast() {
   const l = live.get()
@@ -293,13 +307,24 @@ export function repeatLast() {
   if (waiter) waiter(RETRY)
 }
 
+/** Counts one more play of a tutor line; returns the new count. */
+function bumpPlays(id: string): number {
+  let n = 0
+  patch((l) => ({ bubbles: l.bubbles.map((b) => (b.id === id ? { ...b, plays: (n = (b.plays ?? 1) + 1) } : b)) }))
+  return n
+}
+/** Played again and again: obviously not understood. Slower from the 3rd time. */
+const replayRate = (plays: number) => (plays >= HINT_AFTER ? 0.85 : live.get()?.struggle ? 0.9 : 1)
+
 /** Replays one tutor message (tap on a bubble), outside the conversation flow. */
-export function replay(segs: Seg[]) {
+export function replay(id: string) {
   const l = live.get()
-  if (!l || l.status === 'listening' || l.status === 'thinking') return
+  const b = l?.bubbles.find((x) => x.id === id)
+  if (!l || !b?.segs || l.status === 'listening' || l.status === 'thinking') return
   stopSpeaking()
-  const q = new SpeakQueue((lang) => sayOpts(l.stage, lang))
-  segs.forEach((x) => q.push(x.text, x.lang))
+  const n = bumpPlays(id)
+  const q = new SpeakQueue((lang) => sayOpts(l.stage, lang, replayRate(n)))
+  b.segs.forEach((x) => q.push(x.text, x.lang))
 }
 
 // ---------------- 1. Spaced review
@@ -394,8 +419,8 @@ async function onCommand(c: Command, g: number): Promise<boolean> {
   if (c === 'end') { patch({ phase: 'recap' }); return true }
   if (c === 'faster') { nudgeRate(RATE_STEP); await speak([es('Más rápido.')], g); return false }
   patch((l) => ({ asks: l.asks + 1 }))
-  if (c === 'repeat') { await speak(lastSay, g, live.get()!.struggle ? 0.9 : 1); return false }
-  if (c === 'slower') { nudgeRate(-RATE_STEP); await speak(lastSay, g, 0.9); return false }
+  if (c === 'repeat') { await speak(lastSay, g, replayRate(bumpPlays(lastSayId))); return false }
+  if (c === 'slower') { nudgeRate(-RATE_STEP); bumpPlays(lastSayId); await speak(lastSay, g, 0.9); return false }
   // "en inglés"
   addMine('en inglés')
   await tutorTurn([{ role: 'user', content: 'en inglés' }, { role: 'system', content: ENGLISH }], g)
@@ -430,14 +455,14 @@ async function tutorTurn(add: Msg[], g: number): Promise<boolean> {
       alive(g)
       const { segs, notes } = parser.end()
       history.push(...add, { role: 'assistant', content: res.content as unknown as Exclude<Msg['content'], string | undefined> } as Msg)
-      if (segs.length) lastSay = segs
+      if (segs.length) { lastSay = segs; lastSayId = id }
       const corrections: Correction[] = notes.mistakes.map((m) => ({ ...m, revealed: !m.ask }))
       const now = Date.now()
       const ms: Mistake[] = notes.mistakes.map((m) => ({ id: uid(), at: now, session: l.id, stage: l.stage, type: m.type, said: m.said, fix: m.fix, why: m.why, big: m.big }))
       addMistakes(ms)
       patch((cur) => {
         // Corrections belong under the learner's last message.
-        const bubbles = cur.bubbles.map((b) => (b.id === id ? { ...b, text: segs.map((s) => s.text).join(' '), segs, streaming: false } : b))
+        const bubbles = cur.bubbles.map((b) => (b.id === id ? { ...b, text: segs.map((s) => s.text).join(' '), segs, streaming: false, plays: 1 } : b))
         for (let i = bubbles.length - 1; i >= 0; i--) if (bubbles[i].who === 'me') { if (corrections.length) bubbles[i] = { ...bubbles[i], corrections }; break }
         return {
           bubbles,

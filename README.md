@@ -41,8 +41,8 @@ The key stays on this phone only (IndexedDB). It is sent only to Google (or Anth
   3. **Recap (1 min)**: your top 3 fixes, written and read aloud, added to the review.
 - **Tap-to-talk**: tap the gold mic, speak (pauses are fine), tap again to send. Tap it while the tutor talks to interrupt. Tap a tutor bubble to hear it again.
 - **Hands-free** (driving, walking the dog): three big buttons (Pause, Repeat, End), nothing to read, everything spoken, it listens by itself after the tutor. The screen stays on.
-- **Voice commands** (any time): **"repite"**, **"más despacio"** (and "más rápido"), **"en inglés"**, **"terminar"**.
-- **Progress**: level (and the 5-minute placement test, retake any time), Stage 1 / Stage 2, mistakes by type (verb forms, vocabulary, gender, French interference, listening), words learned, session history.
+- **Voice commands** (any time): **"repite"** (from the 3rd play of a line: slower, and a phone call shows the words), **"más despacio"** (and "más rápido"), **"en inglés"**, **"terminar"**.
+- **Progress**: level (and the placement test in 3 short saved parts (checked in the background, retake any time; a question’s words show from its 3rd play)), Stage 1 / Stage 2, mistakes by type (verb forms, vocabulary, gender, French interference, listening), words learned, session history.
 - **Stage 2 unlocks by itself** at A2, after 8 finished Stage 1 sessions with few big mistakes lately. You can switch stage any time.
 - **Settings**: API key, voice speed and test, hands-free default, mic test, accents (Catalina's region: Bogotá, Medellín, Cali, Barranquilla, Bucaramanga) and voices, backup (export/import JSON), cost this session / month.
 

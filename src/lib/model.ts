@@ -35,6 +35,15 @@ export const defaultSettings = (): Settings => ({ rate: 0.9, handsFreeDefault: f
 
 export interface Placement { at: number; level: number; label: string; summary: string; weak: MistakeType[]; scores?: Partial<Record<MistakeType, number>> }
 
+/** One graded answer of the placement test. */
+export interface PlacementItemGrade { id: string; score: number; issues: MistakeType[]; fix: string }
+/** A placement test in progress: answers and graded parts are kept, so nothing is redone. */
+export interface PlacementDraft {
+  startedAt: number
+  answers: Record<string, { heard: string; plays: number }>
+  graded: Record<number, { items: PlacementItemGrade[]; note: string }>
+}
+
 export interface Profile {
   /** 1 = A1, 1.5 = A1+, 2 = A2, 2.5 = A2+, 3 = B1. */
   level: number
@@ -46,6 +55,7 @@ export interface Profile {
   /** Today's scenario (picked once a day, or changed on Home). */
   today?: { date: string; stage: StageId; scenario: string }
   seeded: boolean
+  placementDraft?: PlacementDraft
 }
 
 export const defaultProfile = (): Profile => ({ level: 1.5, stage: 1, stage2Unlocked: false, unlockSeen: false, placements: [], seeded: false })

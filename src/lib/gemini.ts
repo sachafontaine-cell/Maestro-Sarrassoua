@@ -19,8 +19,8 @@ export interface GeminiResult { text: string; model: string; input: number; cach
 
 /** Little hidden thinking on conversation turns: it only adds waiting. */
 function thinkingFor(model: string, effort: 'low' | 'medium'): object | undefined {
-  if (effort === 'medium') return undefined
-  if (/^gemini-2\.5/.test(model)) return { thinkingBudget: 0 }
+  // Grading gets a little room to think, capped: unlimited thinking is what made it time out.
+  if (/^gemini-2\.5/.test(model)) return { thinkingBudget: effort === 'medium' ? 1024 : 0 }
   if (/^gemini-[3-9]|flash-latest/.test(model)) return { thinkingLevel: 'low' }
   return undefined
 }
@@ -45,13 +45,15 @@ export function answerText(j: any): string {
 
 /** One streamed answer from one model. `onDelta` gets each new piece of text. */
 async function streamOnce(key: string, model: string, body: Record<string, unknown>, effort: 'low' | 'medium', onDelta: (d: string) => void, signal?: AbortSignal, thinking = true): Promise<GeminiResult> {
+  // Time to the first words (thinking happens before them), then time between pieces.
+  const firstMs = effort === 'medium' ? 90000 : 45000
   const t = thinking ? thinkingFor(model, effort) : undefined
   const gen = { ...(body.generationConfig as object), ...(t ? { thinkingConfig: t } : {}) }
   const ctrl = new AbortController()
   const stop = () => ctrl.abort()
   signal?.addEventListener('abort', stop)
-  let timer = setTimeout(stop, 40000)
-  const poke = () => { clearTimeout(timer); timer = setTimeout(stop, 25000) }
+  let timer = setTimeout(stop, firstMs)
+  const poke = () => { clearTimeout(timer); timer = setTimeout(stop, 30000) }
   let all = '', input = 0, cached = 0, output = 0, sent = 0
   try {
     const r = await fetch(`${API}/models/${model}:streamGenerateContent?alt=sse`, {
@@ -129,7 +131,7 @@ export function modelOrder(good: string | undefined, available: string[], now = 
 }
 
 /** One streamed turn, moving to the next model while one is busy. */
-export async function geminiStream(key: string, system: string, msgs: GeminiMsg[], o: { maxTokens: number; effort: 'low' | 'medium'; onDelta: (d: string) => void; signal?: AbortSignal }): Promise<GeminiResult> {
+export async function geminiStream(key: string, system: string, msgs: GeminiMsg[], o: { maxTokens: number; effort: 'low' | 'medium'; json?: boolean; onDelta: (d: string) => void; signal?: AbortSignal }): Promise<GeminiResult> {
   if (!modelsCache || modelsCache.key !== key || Date.now() - modelsCache.at > 6 * 3600000) {
     try { modelsCache = { key, list: await flashModels(key), at: Date.now() } } catch (e) { if (!settings.get().geminiModel) throw e }
   }
@@ -138,10 +140,15 @@ export async function geminiStream(key: string, system: string, msgs: GeminiMsg[
   const body = {
     systemInstruction: { parts: [{ text: system }] },
     contents: msgs.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
-    generationConfig: { maxOutputTokens: o.maxTokens },
+    // Thinking counts against the output limit on Gemini: leave room for it.
+    generationConfig: { maxOutputTokens: o.maxTokens + (o.effort === 'medium' ? 2048 : 0), ...(o.json ? { responseMimeType: 'application/json' } : {}) },
   }
   let last: unknown
-  for (const model of order) {
+  // Free tier: when every model is busy, wait a little and go round once more (only before
+  // any words were spoken, so nothing is said twice).
+  for (const [i, model] of [...order, ...order].entries()) {
+    if (i === order.length) await new Promise((r) => setTimeout(r, 4000))
+    if (o.signal?.aborted) break
     try {
       const r = await streamOnce(key, model, body, o.effort, o.onDelta, o.signal)
       if (settings.get().geminiModel !== model) setSettings({ geminiModel: model })

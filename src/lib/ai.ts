@@ -58,6 +58,8 @@ export interface CallOpts {
   onText?: (delta: string) => void
   signal?: AbortSignal
   effort?: 'low' | 'medium'
+  /** The answer is JSON only (grading): Gemini is told so, Claude follows the prompt. */
+  json?: boolean
 }
 
 export interface CallResult { text: string; content: BetaContentBlock[]; stop: string | null }
@@ -141,7 +143,7 @@ async function callGemini(o: CallOpts): Promise<CallResult> {
     text: typeof m.content === 'string' ? m.content : (m.content ?? []).map((b) => (b.type === 'text' ? b.text : '')).join('\n'),
   })).filter((m) => m.text)
   try {
-    const r = await geminiStream(settings.get().apiKey!, o.system.join('\n\n'), msgs, { maxTokens: o.maxTokens, effort: o.effort ?? 'low', onDelta: (d) => o.onText?.(d), signal: o.signal })
+    const r = await geminiStream(settings.get().apiKey!, o.system.join('\n\n'), msgs, { maxTokens: o.maxTokens, effort: o.effort ?? 'low', json: o.json, onDelta: (d) => o.onText?.(d), signal: o.signal })
     addUsage({ id: uid(), at: Date.now(), session: o.session, kind: o.kind, model: r.model, input: r.input - r.cached, cacheWrite: 0, cacheRead: r.cached, output: r.output, usd: 0 })
     return { text: r.text, content: [{ type: 'text', text: r.text, citations: null }] as unknown as BetaContentBlock[], stop: 'end_turn' }
   } catch (e) { throw geminiError(e) }

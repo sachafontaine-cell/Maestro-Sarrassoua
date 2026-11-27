@@ -248,3 +248,15 @@ select.field { appearance: none; -webkit-appearance: none; padding-right: 32px; 
 .spinner { width: 22px; height: 22px; border: 2.5px solid var(--border); border-top-color: var(--text); border-radius: 50%; animation: spin 700ms linear infinite; flex-shrink: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .toast { position: fixed; left: 16px; right: 16px; bottom: calc(var(--tabbar) + env(safe-area-inset-bottom) + 16px); z-index: 40; min-height: 52px; padding: 0 16px; border-radius: 14px; background: var(--primary); color: var(--on-primary); display: flex; align-items: center; font-size: 15px; animation: up 160ms ease-out; }
+
+/* Placement: the Spanish words, shown from the 3rd play */
+.hint-es { font-size: 20px; font-weight: 600; padding: 10px 12px; border-radius: 12px; background: var(--gold-bg); color: var(--text); }
+.hint-es .label { color: var(--gold-text); }
+.sesshead .pill { min-height: 40px; padding: 0 12px; font-size: 14px; }
+.sesshead .pill svg { width: 18px; height: 18px; }
+.phases .timer { min-width: 0; padding: 4px 6px; }
+/* Session header: ✕, steps with the clock, Hands-free, all on one phone-width line */
+.sesshead { gap: 4px; padding-left: 6px; padding-right: 10px; }
+.sesshead .phases { gap: 2px; min-width: 0; }
+.sesshead .phases span { padding: 4px 7px; font-size: 12.5px; }
+.sesshead .pill { padding: 0 10px; font-size: 13px; gap: 4px; }

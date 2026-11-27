@@ -78,7 +78,7 @@ await test('first run: Home asks for the key; the button leads to Settings → k
   await p.goto(BASE)
   await p.getByRole('heading', { name: 'Hablemos' }).waitFor()
   const t = await text(p)
-  expect(t.includes('0 days'), 'streak shown')
+  expect(t.includes('Start a streak'), 'streak shown')
   expect(/Today · Stage 1/i.test(t), 'today card')
   expect(t.includes('Rosa · Mexico City'), 'persona')
   await shot(p, '0-first-run')
@@ -168,12 +168,12 @@ await test('session (tap-to-talk): review by voice, role-play with a correction 
   await p.getByRole('button', { name: 'Done' }).waitFor({ timeout: 10000 })
   const recapReq = posts(p)[posts(p).length - 1].body
   expect(recapReq.system[0].text === first.system[0].text && recapReq.system[1].text === first.system[1].text, 'the recap reuses the cached prompt')
-  expect((await spoken(p)).includes('Ayer fui al mercado'), 'fixes read aloud')
+  await waitSpoken(p, /^Ayer fui al mercado$/) // fixes read aloud
   await p.getByText(/3 added to your review list/).waitFor()
   await shot(p, '3-recap')
   await p.getByRole('button', { name: 'Done' }).click()
   // Home: streak, done today.
-  await p.getByText('1 day').waitFor()
+  await p.getByText('1-day streak').waitFor()
   await p.getByText(/Done today/i).waitFor()
   await p.getByRole('button', { name: 'Practice again' }).waitFor()
   // Progress: mistakes by type and the session in the history.
@@ -317,28 +317,80 @@ await test('wrong key: the session says so and points to Settings', async () => 
   await p.context().close()
 })
 
-await test('placement test: 12 spoken items, graded, level and focus updated', async () => {
+await test('placement test: 3 saved parts checked in the background; words shown at the 3rd play; a failed check is retried alone', async () => {
   const p = await page()
   await addKey(p)
-  await p.goto(BASE + '#/progress')
-  await p.getByRole('button', { name: /Take the placement test/ }).click()
-  await p.getByRole('button', { name: 'Start' }).click()
-  for (let i = 0; i < 12; i++) {
-    await p.getByText(`${i + 1} / 12`).waitFor()
-    if (i === 0) { await p.getByRole('button', { name: 'Play again' }).click() }
-    if (i === 2) { await p.getByRole('button', { name: 'Skip this one' }).click(); continue }
-    await speakTurn(p, i % 2 ? 'Mañana voy a nadar en la playa' : 'Me llamo Sacha y soy de Francia')
-  }
+  await p.goto(BASE)
+  await p.getByRole('button', { name: /New here\? Take the placement test/ }).click()
+  await p.getByRole('button', { name: 'Start part 1' }).click()
+  // Part 1, question 1 (listen): the words appear from the 3rd play.
+  await p.getByText('Part 1 of 3 · 1/4').waitFor()
+  await waitSpoken(p, /Cómo se llama/)
+  expect(!(await text(p)).includes('¿Cómo se llama usted'), 'no words at first')
+  await p.getByRole('button', { name: 'Play again' }).click()
+  await p.getByText(/words appear after the third play/).waitFor()
+  await p.waitForFunction(() => !document.querySelector('.reviewcard button').disabled)
+  await p.getByRole('button', { name: 'Play again' }).click()
+  await p.getByText('¿Cómo se llama usted y de dónde es?').waitFor()
+  const third = await p.evaluate(() => window.__spoken.filter((s) => /Cómo se llama/.test(s.text)).map((s) => s.rate))
+  expect(third.length === 3 && third[2] < 1, 'slower at the 3rd play: ' + third)
+  await shot(p, '7-placement-hint')
+  await speakTurn(p, 'Me llamo Sacha y soy de Francia')
+  await speakTurn(p, 'Limpio la cocina todos los lunes')
+  await p.getByRole('button', { name: 'I don’t know, skip' }).click()
+  await speakTurn(p, 'Mañana voy a nadar en la playa')
+  // Break: part 1 is checked while you go on.
+  await p.getByRole('heading', { name: 'Part 1 done' }).waitFor()
+  await p.getByText('Checked').waitFor()
+  const req1 = posts(p)[0].body
+  expect(/placement examiner/.test(req1.system[0].text) && /Part 1 of 3/.test(req1.messages[0].content), 'part 1 graded alone')
+  expect(/played 3×/.test(req1.messages[0].content) && /answer: ""/.test(req1.messages[0].content), 'plays and skips reported')
+  // Stop here; come back later: the answers are kept.
+  await p.getByRole('button', { name: 'Stop here, continue later' }).click()
+  await p.getByRole('button', { name: /Continue the placement test/ }).click()
+  await p.getByRole('button', { name: 'Continue (part 2 of 3)' }).click()
+  await p.getByText('Part 2 of 3 · 1/4').waitFor()
+  for (let i = 0; i < 4; i++) await speakTurn(p, 'Ayer fui al mercado y compré fruta')
+  await p.getByRole('heading', { name: 'Part 2 done' }).waitFor()
+  // Part 3's check fails once (busy): retried alone, nothing to answer again.
+  p.claudeFailNext = true
+  await p.getByRole('button', { name: /Next: part 3/ }).click()
+  for (let i = 0; i < 4; i++) await speakTurn(p, 'No sé')
+  await p.getByRole('heading', { name: 'All parts answered' }).waitFor()
+  await p.getByRole('button', { name: 'Try again' }).click()
   await p.getByText('Your level').waitFor({ timeout: 10000 })
+  // Parts 1–2 good (0.8), part 3 weak (0.3): A2.
   await p.getByText('A2', { exact: true }).waitFor()
-  const req = posts(p)[0].body
-  expect(/placement examiner/.test(req.system[0].text), 'graded by the examiner prompt')
-  const answers = req.messages[0].content
-  expect(/replayed 1×/.test(answers) && /Answer: ""/.test(answers), 'replays and skips are reported')
-  expect(req.output_config?.effort === 'medium', 'graded with more thinking')
+  await p.getByText(/Part 1 note\. Part 2 note\. Part 3 note\./).waitFor()
+  await p.getByText(/focus on: verb forms/).waitFor()
+  expect(posts(p).filter((c) => /placement examiner/.test(c.body.system[0].text)).length === 4, '3 parts + 1 retry')
   await shot(p, '7-placement')
   await p.getByRole('button', { name: 'Done' }).click()
   await p.getByText(/Placement test .*: A2\./).waitFor()
+  await p.context().close()
+})
+
+await test('phone call: the words show after the 3rd play, and it gets slower', async () => {
+  const p = await page()
+  await addKey(p)
+  await p.goto(BASE + '#/progress')
+  await p.getByRole('button', { name: 'Stage 2 · Catalina' }).click()
+  await p.getByRole('button', { name: 'Home' }).click()
+  await p.getByRole('button', { name: 'Change scenario' }).click()
+  await p.getByRole('dialog', { name: 'Today’s scenario' }).getByText('A phone call at real speed').click()
+  await p.getByRole('button', { name: 'Start today’s session' }).click()
+  await p.getByRole('button', { name: 'Skip to the conversation' }).click()
+  await p.getByText(/Phone call: listen first/).waitFor()
+  await p.getByText('Tap the mic and speak').waitFor()
+  await p.getByRole('button', { name: 'Repeat', exact: true }).click()
+  await p.waitForFunction(() => window.__spoken.filter((s) => /Qué limpio/.test(s.text)).length >= 2)
+  await p.getByText(/Phone call: listen first/).waitFor()
+  await p.getByText('Tap the mic and speak').waitFor()
+  await p.getByRole('button', { name: 'Repeat', exact: true }).click()
+  await p.getByText('¿Qué limpio primero hoy, la cocina o el baño?').waitFor()
+  await p.waitForFunction(() => window.__spoken.filter((s) => /Qué limpio/.test(s.text)).length >= 3)
+  const rates = await p.evaluate(() => window.__spoken.filter((s) => /Qué limpio/.test(s.text)).map((s) => s.rate))
+  expect(rates.length === 3 && rates[2] < rates[0], 'slower at the 3rd play: ' + rates)
   await p.context().close()
 })
 
@@ -364,11 +416,11 @@ await test('stage switch lives in Progress; Home follows; Settings region change
   await p.waitForTimeout(300)
   await p.goto(BASE + '#/progress')
   await p.getByText(/Stage 2 unlocks when you/).waitFor()
-  await p.getByRole('button', { name: 'Stage 2 · locked' }).click()
+  await p.getByRole('button', { name: 'Stage 2 · Catalina' }).click()
   await p.getByRole('button', { name: 'Home' }).click()
   await p.getByText('Catalina · Medellín').waitFor()
   await p.getByText(/Today · Stage 2/i).waitFor()
-  await p.getByRole('button', { name: 'Change' }).click()
+  await p.getByRole('button', { name: 'Change scenario' }).click()
   await p.getByRole('dialog', { name: 'Today’s scenario' }).getByText('A phone call at real speed').click()
   await p.getByRole('heading', { name: 'A phone call at real speed' }).waitFor()
   await p.getByRole('button', { name: 'Start today’s session' }).click()

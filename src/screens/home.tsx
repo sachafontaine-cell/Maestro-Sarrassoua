@@ -38,7 +38,7 @@ export function Home() {
     <main class="main">
       <div class="between">
         <div class="brand"><Fleur size={24} /><h1 class="h1">Hablemos</h1></div>
-        <span class="streak" aria-label={`${days}-day streak`}><Icon.flame />{days} {days === 1 ? 'day' : 'days'}</span>
+        <span class="streak" aria-label={days ? `${days}-day streak` : 'No streak yet'}><Icon.flame />{days ? `${days}-day streak` : 'Start a streak'}</span>
       </div>
 
       {p.stage2Unlocked && !p.unlockSeen && (
@@ -59,9 +59,17 @@ export function Home() {
         <div class="who"><span class="avatar">{p.stage === 1 ? 'R' : 'C'}</span>{who}{sc.phone && <span class="chip plain"><Icon.phone />Phone call</span>}</div>
         <div class="between">
           <span class="muted">{due ? `${due} to review first` : 'Nothing to review today'} · ~15 min</span>
-          <button class="link press" onClick={() => open({ kind: 'scenarios' })}>Change</button>
+          <button class="link press" onClick={() => open({ kind: 'scenarios' })}>Change scenario</button>
         </div>
       </section>
+
+      {!p.placements.length && s.apiKey && (
+        <button class="banner press" onClick={() => go('placement')}>
+          <Icon.chart />
+          <span class="grow"><b>{p.placementDraft ? 'Finish your placement test' : 'New here? Take the placement test'}</b><br /><span class="muted">3 short spoken parts. Sets your level and focus.</span></span>
+          <Icon.chev />
+        </button>
+      )}
 
       <div class="startdock">
         {!s.apiKey ? (

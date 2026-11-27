@@ -6,7 +6,15 @@ const notes = (m = [], extra = {}) => `<notes>${JSON.stringify({ m, struggle: fa
 export function tutorReply(body) {
   const sys = (body.system || []).map((b) => b.text).join('\n')
   if (sys.startsWith('You are a Spanish placement examiner')) {
-    return '<result>{"level":"A2","summary":"You understand everyday questions and can answer in short sentences. Past tense forms still slow you down.","scores":{"verb":0.5,"vocab":0.7,"gender":0.8,"french":0.6,"listening":0.6},"weak":["verb","french"],"cards":[{"cue":"How do you say: I went to the market?","answer":"Fui al mercado.","alts":[],"t":"verb"}]}</result>'
+    const msgs0 = body.messages || []
+    const u = typeof msgs0[0].content === 'string' ? msgs0[0].content : msgs0[0].content.map((b) => b.text).join('')
+    const ids = [...u.matchAll(/id "(\w+)"/g)].map((m) => m[1])
+    const part = Number(/Part (\d)/.exec(u)[1])
+    return JSON.stringify({
+      items: ids.map((id) => ({ id, score: part === 3 ? 0.3 : 0.8, issues: id.startsWith('s') ? ['verb'] : [], fix: 'Fui al mercado.' })),
+      note: `Part ${part} note.`,
+      cards: part === 2 ? [{ cue: 'How do you say: I went to the market?', answer: 'Fui al mercado.', alts: [], t: 'verb' }] : [],
+    })
   }
   const msgs = body.messages || []
   const text = (m) => (typeof m.content === 'string' ? m.content : (m.content || []).map((b) => b.text || '').join(' '))
@@ -44,6 +52,7 @@ export async function fakeClaude(page, opts = {}) {
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
     const url = new URL(req.url())
     calls.push({ path: url.pathname, headers: req.headers(), body: req.postDataJSON?.() ?? null })
+    if (page.claudeFailNext && url.pathname === '/v1/messages') { page.claudeFailNext = false; return route.fulfill({ status: 401, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'temporarily refused' } }) }) }
     if (opts.fail) return route.fulfill({ status: opts.fail, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }) })
     if (url.pathname.startsWith('/v1/models/')) return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify({ id: 'claude-sonnet-5-5', type: 'model', display_name: 'Claude Sonnet 5.5', created_at: '2026-10-01T00:00:00Z' }) })
     const body = req.postDataJSON()

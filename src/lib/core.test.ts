@@ -8,7 +8,7 @@ import { blendLevel, levelLabel, levelProgress, parseLevel, pickScenario, readyF
 import { bestVoice, chunks, voiceScore } from './speech'
 import { flattenSystem } from './ai'
 import { parseRecap, localRecap } from './session'
-import { parsePlacement } from './placement'
+import { parsePart, levelFrom, PARTS } from './placement'
 import { sessionBlock, TUTOR } from './prompts'
 import type { Mistake, SessionRec } from './model'
 
@@ -199,10 +199,9 @@ describe('AI requests', () => {
     expect(r.cards[0].alts).toEqual(['Yo voy.'])
     expect(r.level).toBe('A2-')
     expect(parseRecap('nothing')).toBe(null)
-    const p = parsePlacement('<result>{"level":"A2-","summary":"ok","scores":{"verb":0.4,"listening":2},"weak":["verb","bogus"],"cards":[]}</result>')!
-    expect(p.level).toBe(1.75)
-    expect(p.scores).toEqual({ verb: 0.4, listening: 1 })
-    expect(p.weak).toEqual(['verb'])
+    const p = parsePart('{"items":[{"id":"s1","score":1.4,"issues":["verb","bogus"],"fix":"Limpio la cocina."}],"note":"ok","cards":[]}', ['s1', 'l1'])!
+    expect(p.items).toEqual([{ id: 's1', score: 1, issues: ['verb'], fix: 'Limpio la cocina.' }, { id: 'l1', score: 0, issues: [], fix: '' }])
+    expect(parsePart('nothing', ['s1'])).toBe(null)
   })
   it('makes a recap without the AI from the session’s own mistakes', () => {
     const r = localRecap({ mistakes: [mis({}), mis({}), mis({ type: 'french', said: 'nager', fix: 'nadar', big: true })], words: [{ es: 'la llave', en: 'faucet' }] }, Date.now())
@@ -228,5 +227,20 @@ describe('pasted keys', () => {
   it('drops spaces, line breaks, quotes and invisible characters', () => {
     expect(cleanKey(' "AIzaSyA12345_67890-abc"\n​')).toBe('AIzaSyA12345_67890-abc')
     expect(isGeminiKey(' AIzaSyA1234567890abcdef \n')).toBe(true)
+  })
+})
+
+describe('placement level, computed on the phone', () => {
+  const grade = (score: (lvl: number) => number) => ({ graded: Object.fromEntries(PARTS.map((p, i) => [i, { note: `n${i}`, items: p.items.map((it) => ({ id: it.id, score: score(it.level), issues: it.kind === 'say' && score(it.level) < 0.7 ? ['verb' as const] : [], fix: '' })) }])) })
+  it('is the hardest band handled well', () => {
+    expect(levelFrom(grade(() => 1)).level).toBe(3)
+    expect(levelFrom(grade((l) => (l <= 2 ? 0.8 : 0.2))).level).toBe(2)
+    expect(levelFrom(grade((l) => (l <= 1.5 ? 0.8 : l === 2 ? 0.5 : 0))).level).toBe(1.75)
+    expect(levelFrom(grade(() => 0)).level).toBe(1)
+  })
+  it('finds the weak spots and keeps the notes', () => {
+    const r = levelFrom(grade((l) => (l <= 1.5 ? 0.9 : 0.3)))
+    expect(r.weak[0]).toBe('verb')
+    expect(r.summary).toBe('n0 n1 n2')
   })
 })

@@ -1,7 +1,7 @@
 // The session: review, then the conversation, then the recap. Tap-to-talk with the big gold
 // mic (thumb reach), or hands-free: three big buttons and nothing to read.
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { live, micTap, sendTyped, setHandsFree, finishNow, endQuietly, pause, resume, repeatLast, replay, retry, skipReview, cancelListening, type Bubble, type Live } from '../lib/session'
+import { HINT_AFTER, live, micTap, showAnswer, sendTyped, setHandsFree, finishNow, endQuietly, pause, resume, repeatLast, replay, retry, skipReview, cancelListening, type Bubble, type Live } from '../lib/session'
 import { scenario as getScenario } from '../lib/curriculum'
 import { TYPE_LABEL } from '../lib/model'
 import { go, open, overlays } from '../lib/nav'
@@ -51,9 +51,9 @@ function Screen({ l }: { l: Live }) {
           {l.review.items.length > 0 && <span class={l.phase === 'review' ? 'on' : ''}>Review</span>}
           <span class={l.phase === 'talk' ? 'on' : ''}>Talk</span>
           <span class={ended ? 'on' : ''}>Recap</span>
+          <span class="timer num" aria-label="Time">{clock}</span>
         </div>
-        <span class="timer num" aria-label="Time">{clock}</span>
-        {!ended && <button class="iconbtn ring press" aria-label="Switch to hands-free" onClick={() => setHandsFree(true)}><Icon.car /></button>}
+        {!ended && <button class="pill press" aria-label="Switch to hands-free" onClick={() => setHandsFree(true)}><Icon.car />Hands-free</button>}
       </header>
       {l.phase === 'review' ? <Review l={l} /> : ended ? <RecapView l={l} /> : <Chat l={l} />}
       {!ended && <Dock l={l} />}
@@ -81,6 +81,7 @@ function Review({ l }: { l: Live }) {
         </section>
       )}
       <ErrorBox l={l} />
+      {it && !l.review.shown && <button class="link press" style={{ alignSelf: 'center' }} onClick={showAnswer}>I don’t know: show the answer</button>}
       <button class="link press" style={{ alignSelf: 'center' }} onClick={skipReview}>Skip to the conversation</button>
     </div>
   )
@@ -95,7 +96,7 @@ function Chat({ l }: { l: Live }) {
     <div class="chat" ref={ref} aria-live="polite">
       <p class="scene"><b>{sc.title}</b><span>{sc.goal}</span></p>
       {l.bubbles.map((b) => b.who === 'me' ? <Mine b={b} /> : (
-        <TutorBubble b={b} hide={!!sc.phone && !shown[b.id]} onShow={() => setShown({ ...shown, [b.id]: true })} />
+        <TutorBubble b={b} hide={!!sc.phone && !shown[b.id] && (b.plays ?? 0) < HINT_AFTER} onShow={() => setShown({ ...shown, [b.id]: true })} />
       ))}
       {l.status === 'listening' && l.interim && <div class="bubble me ghost">{l.interim}</div>}
       <ErrorBox l={l} />
@@ -105,9 +106,9 @@ function Chat({ l }: { l: Live }) {
 
 function TutorBubble({ b, hide, onShow }: { b: Bubble; hide: boolean; onShow: () => void }) {
   if (b.streaming && !b.text) return <div class="bubble tutor" aria-label="Thinking"><span class="dots"><i /><i /><i /></span></div>
-  if (hide) return <button class="bubble tutor hidden-text press" onClick={onShow}><span><Icon.phone /> Phone call: listen first. Tap to see the words.</span></button>
+  if (hide) return <button class="bubble tutor hidden-text press" onClick={onShow}><span><Icon.phone /> Phone call: listen first. The words show after the 3rd play (Repeat), or tap here.</span></button>
   return (
-    <button class="bubble tutor press" onClick={() => b.segs && replay(b.segs)} aria-label={`${b.text}. Tap to hear again.`}>
+    <button class="bubble tutor press" onClick={() => replay(b.id)} aria-label={`${b.text}. Tap to hear again.`}>
       {b.segs ? b.segs.map((s) => <span class={s.lang === 'en' ? 'en' : ''}>{s.text}</span>) : <span>{b.text}</span>}
       {!b.streaming && <span class="play"><Icon.speaker />Tap to hear again</span>}
     </button>
@@ -216,8 +217,8 @@ function RecapView({ l }: { l: Live }) {
           </>
         )}
         {r.added > 0 && <p class="muted">{r.added} added to your review list (back tomorrow).</p>}
-        {l.phase === 'done' && <button class="btn btn-primary press" onClick={() => go('home', undefined, true)}>Done</button>}
         {l.phase !== 'done' && <p class="muted tcenter">Reading it aloud…</p>}
+        <button class="btn btn-primary press" onClick={() => go('home', undefined, true)}>Done</button>
       </section>
     </div>
   )
@@ -229,7 +230,7 @@ function HandsFree({ l }: { l: Live }) {
   return (
     <div class="hf">
       <div class="top">
-        <button class="press" onClick={() => setHandsFree(false)} aria-label="Use the screen"><Icon.back />Screen</button>
+        <button class="press" onClick={() => setHandsFree(false)} aria-label="Use the screen"><Icon.back />Show screen</button>
         <span class="sr" role="status">{paused ? 'Paused' : l.status}</span>
       </div>
       <div class={`orb ${l.status}`} aria-hidden="true"><span>{icon}</span></div>

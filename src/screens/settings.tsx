@@ -233,7 +233,7 @@ function About() {
   useEffect(() => { void checkForUpdate() }, [])
   return (
     <button class="ver press" onClick={async () => { setSt('Checking…'); setSt((await updateNow()) === 'latest' ? 'Up to date' : 'Updating…') }}>
-      <Fleur size={18} /> Hablemos {__VERSION__}{st ? ` · ${st}` : ''}
+      <Fleur size={18} /> Hablemos {__VERSION__} · {st || 'Check for updates'}
     </button>
   )
 }

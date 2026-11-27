@@ -5,7 +5,7 @@ import { cards, mistakes, profile, sessions, setProfile } from '../lib/data'
 import { scenario as getScenario, STAGES } from '../lib/curriculum'
 import { MISTAKE_TYPES, TYPE_LABEL, type SessionRec, type StageId } from '../lib/model'
 import { levelProgress, unlockMissing } from '../lib/plan'
-import { LEARNED_STEP, DAY } from '../lib/srs'
+import { LEARNED_STEP, DAY, nextLabel } from '../lib/srs'
 import { norm } from '../lib/grade'
 import { go, open, overlays, route } from '../lib/nav'
 import { openTest } from '../lib/placement'
@@ -54,10 +54,10 @@ export function Progress() {
           </div>
           <div class="bar" role="progressbar" aria-valuenow={Math.round(lv.pct * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={`Progress to ${lv.next}`}><span style={{ width: `${Math.max(4, lv.pct * 100)}%` }} /></div>
           {last && <p class="muted">Placement test {fmtDate(last.at)}: {last.label}. {last.summary}</p>}
-          <button class="btn btn-quiet btn-sm press" onClick={() => { openTest(); go('placement') }}>{last ? 'Retake the placement test' : 'Take the placement test'} (5 min)</button>
+          <button class="btn btn-quiet btn-sm press" onClick={() => { openTest(); go('placement') }}>{p.placementDraft ? 'Continue the placement test' : last ? 'Retake the placement test' : 'Take the placement test'} (3 short parts)</button>
         </div>
         <span class="label">Stage</span>
-        <Seg label="Stage" value={p.stage} onChange={setStage} options={[[1, 'Stage 1 · Rosa'], [2, p.stage2Unlocked ? 'Stage 2 · Catalina' : 'Stage 2 · locked']]} />
+        <Seg label="Stage" value={p.stage} onChange={setStage} options={[[1, 'Stage 1 · Rosa'], [2, 'Stage 2 · Catalina']]} />
         <p class="setnote">
           {p.stage === 1 ? STAGES[1].who : STAGES[2].who}.{' '}
           {p.stage2Unlocked ? 'Stage 2 is unlocked.' : `Stage 2 unlocks when you ${unlockMissing(p.level, list).join(', ')}. You can switch any time.`}
@@ -80,6 +80,7 @@ export function Progress() {
           })}
           {!recent.length && <p class="muted">No mistakes recorded yet: they appear after your first session.</p>}
         </div>
+        {top.length > 0 && <span class="label">Most frequent</span>}
         {top.length > 0 && (
           <div class="setgroup" aria-label="Most frequent">
             {top.map((x) => <div class="setrow"><span class="grow"><b>{x.fix}</b>{x.said && <><br /><span class="muted">not “{x.said}”</span></>}</span><span class="chip plain">×{x.n}</span></div>)}
@@ -113,7 +114,10 @@ export function Progress() {
       {detail && ss[detail.arg ?? ''] && <History s={ss[detail.arg!]} />}
       {showWords && (
         <Sheet title="Words and phrases">
-          {learned.length ? learned.map((c) => <div class="setrow"><span class="grow"><b>{c.answer}</b><br /><span class="muted">{c.cue}</span></span></div>) : <p class="muted">Nothing learned yet: items count once you remember them at the 3-day review.</p>}
+          <span class="label">Learned · {learned.length}</span>
+          {learned.length ? <div class="setgroup">{learned.map((c) => <div class="setrow"><span class="grow"><b>{c.answer}</b><br /><span class="muted">{c.cue}</span></span></div>)}</div> : <p class="muted">Nothing yet: an item counts once you remember it at the 3-day review.</p>}
+          <span class="label">In review · {all.length - learned.length}</span>
+          <div class="setgroup">{all.filter((c) => c.step < LEARNED_STEP).sort((a, b) => a.due - b.due).map((c) => <div class="setrow"><span class="grow"><b>{c.answer}</b><br /><span class="muted">{c.cue}</span></span><span class="setval">{nextLabel(c, now)}</span></div>)}</div>
         </Sheet>
       )}
     </main>

@@ -101,10 +101,16 @@ Rules:
 - "level": your CEFR estimate of the learner's speaking today: one of A1, A1+, A2-, A2, A2+, B1-, B1.
 - Types: "verb", "vocab", "gender", "french", "listening".`
 
-// ---- Placement test grading (one call at the end of the test).
-export const PLACEMENT = `You are a Spanish placement examiner. The learner (native French speaker, fluent English) just took a 5-minute spoken placement test in a phone app. Their answers came through speech recognition, so ignore punctuation, accents and capitalisation, and assume homophones were said correctly. An empty answer means they skipped or said nothing.
+// ---- Placement test grading: one small call per part (4 answers), so it is quick and a
+// failure only repeats that check, never the test.
+export const PLACEMENT = `You are a Spanish placement examiner. The learner (native French speaker, fluent English) is taking a spoken placement test in a phone app, in three short parts. Their answers came through speech recognition, so ignore punctuation, accents and capitalisation, and assume homophones were said correctly. An empty answer means they skipped or said nothing.
 
-Assess their speaking and listening level on the CEFR scale and find their weak spots. Output ONLY this, with nothing before or after:
-<result>{"level":"A2-","summary":"Two short sentences in English: what they can do, and what holds them back.","scores":{"verb":0.6,"vocab":0.7,"gender":0.8,"french":0.7,"listening":0.5},"weak":["verb","listening"],"cards":[{"cue":"How do you say: Yesterday I went to the market?","answer":"Ayer fui al mercado.","alts":[],"t":"verb"}]}</result>
+Grade each answer of this part. Output ONLY one JSON object, nothing before or after:
+{"items":[{"id":"s1","score":0.6,"issues":["verb"],"fix":"Limpio la cocina todos los lunes."}],"note":"One short English sentence about this part: what went well, what held them back.","cards":[{"cue":"How do you say: I clean the kitchen every Monday?","answer":"Limpio la cocina todos los lunes.","alts":[],"t":"verb"}]}
 
-Rules: "level" is one of A1, A1+, A2-, A2, A2+, B1-, B1, B1+. "scores" are 0–1 (1 = no problems) for verb forms, vocabulary, gender agreement, French interference (French words or false friends), and listening comprehension. "weak" lists the weakest 1–3 types, weakest first. "cards" are up to 5 active-recall review items built from their actual mistakes (cue in English asking for the Spanish, natural answer, up to 2 alternative answers).`
+Rules:
+- One entry in "items" per answer, with its id.
+- "score": 0 to 1. 1 = correct and natural for the task; 0.7 = understandable with small errors; 0.4 = partly right or very short; 0 = wrong, off-topic, or empty. For a "listen" item, an answer that shows they misunderstood the question scores at most 0.3 (and gets the "listening" issue); replaying the question is fine but 3+ replays cap the score at 0.7.
+- "issues": the problem types in that answer, from "verb" (person, tense, ir a + infinitive, ser/estar), "vocab", "gender" (agreement), "french" (French words or false friends), "listening" (misunderstood the question). Empty list if none.
+- "fix": a natural correct answer in Spanish (short).
+- "cards": up to 2 active-recall review items from their real mistakes in this part (cue in English asking for the Spanish, natural answer, up to 2 alternative answers, type "t"). Empty list if no mistakes.`
